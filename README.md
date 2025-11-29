@@ -65,6 +65,75 @@
    - payment-service создает Payment/Invoice → редирект/checkout → webhook провайдера → payment-service обновляет статус → Kafka `payment.completed`/`payment.failed` → course-service/equipment-service подтверждают/отменяют брони, notification-service шлет письма.
 6. **Уведомления**:
    - Любой сервис публикует `notification.send-requested` с типом (email/system/push) → notification-service рендерит шаблон, отправляет через провайдер, логирует результат.
+```mermaid
+flowchart LR
+    %% ========= Bounded Contexts =========
+    subgraph BC_Identity["Identity & Access"]
+        AUTH[auth-service]
+        USER[user-service]
+    end
+
+    subgraph BC_Learning["Learning"]
+        COURSE[course-service]
+        SCHEDULE[schedule-service]
+    end
+
+    subgraph BC_Equipment["Equipment Rental"]
+        EQUIP[equipment-service]
+    end
+
+    subgraph BC_Comm["Communication"]
+        COMM[communication-service]
+        NOTIF[notification-service]
+    end
+
+    subgraph BC_Payments["Payments & Billing"]
+        PAY[payment-service]
+    end
+
+    subgraph BC_Reporting["Reporting"]
+        REPORT[report-service]
+    end
+
+    %% ========= API Gateway =========
+    APIGW[[api-gateway]]
+
+    %% API Gateway -> All services (REST)
+    APIGW --> AUTH
+    APIGW --> USER
+    APIGW --> COURSE
+    APIGW --> SCHEDULE
+    APIGW --> EQUIP
+    APIGW --> COMM
+    APIGW --> PAY
+    APIGW --> NOTIF
+    APIGW --> REPORT
+
+    %% ========= Service-to-service REST =========
+
+    %% auth-service <-> user-service
+    AUTH <--> USER
+
+    %% course-service <-> user-service (преподаватели/студенты)
+    COURSE <--> USER
+
+    %% schedule-service <-> course-service (слоты привязаны к курсам/преподавателям)
+    SCHEDULE <--> COURSE
+
+    %% equipment-service <-> schedule-service (офлайн-слоты, аудитории/оборудование)
+    EQUIP <--> SCHEDULE
+
+    %% payment-service -> course-service / equipment-service (проверка объекта платежа)
+    PAY --> COURSE
+    PAY --> EQUIP
+
+    %% reporting (обычно только чтение/агрегации)
+    REPORT --> COURSE
+    REPORT --> SCHEDULE
+    REPORT --> EQUIP
+    REPORT --> PAY
+    REPORT --> USER
+```
 
 ### 1.5 Соответствие ключевым требованиям SRS
 - **FR-001/FR-002 (регистрация/аутентификация, 2FA для преподавателей)** → auth-service (JWT + refresh + optional TOTP), user-service (email verification, парольный сброс), Kafka `user.registered` для email-подтверждения.
